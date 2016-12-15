@@ -1,14 +1,13 @@
-// Note replace this variable with the folder used to get the images:
+// Replace this variable with the folder used to get the images:
 //
-// Option 1: Using a folder ID
-//   DriveApp.getFolderById('FOLDER_ID');
+// Option 1: IMAGES_FOLDER = {id: 'GOOGLE DRIVE FOLDER ID'}
+// Option 2: IMAGES_FOLDER = {name: 'Sibling Folder Name' }
 //
-// Option 2: Using the name of a folder contained in this doc parent
-// (note this method may fail if the doc is linked to multiple parents)
+// NOTE: The variable is not set directly because when the doc is opening, executing
+//       some DriveApp methods could fail due to auth. That failure makes the
+//       onOpen function to not be run.
 //
-//   findFolder('FOLDER NAME')
-//
-var IMAGES_FOLDER = findFolder('Mockups');
+var IMAGES_FOLDER = {name: 'Mockups' };
 var IGNORE_PATTERN = /^-/;
 var MAX_WIDTH = 677;
 
@@ -28,7 +27,15 @@ function findFolder (name) {
 
 function confirmImageSynchronization () {
   var ui = DocumentApp.getUi();
-  var folder = IMAGES_FOLDER;
+  var folder;
+
+  if ('id' in IMAGES_FOLDER) {
+    folder = DriveApp.getFolderById(IMAGES_FOLDER.id);
+  } else if ('name' in IMAGES_FOLDER) {
+    folder = findFolder(IMAGES_FOLDER.name);
+  } else {
+    throw new Error('The IMAGES_FOLDER variable is not correctly configured');
+  }
 
   if (ui.alert(
       'Image Synchronization',
