@@ -10,11 +10,13 @@
 var IMAGES_FOLDER = {name: 'Mockups' };
 var IGNORE_PATTERN = /^-/;
 var MAX_WIDTH = 677;
+var FILE_ID_REGEX = /https:\/\/drive.google.com\/.*\/file\/d\/(.*)\/.*/;
 
 function onOpen (e) {
   DocumentApp.getUi()
     .createAddonMenu()
     .addItem('Synchronize', 'confirmImageSynchronization')
+    .addItem('Update selected image', 'updateSelected')
     .addToUi();
 }
 
@@ -23,6 +25,51 @@ function findFolder (name) {
   var file = DriveApp.getFileById(doc.getId());
   var parent = file.getParents().next();
   return parent.getFoldersByName(name).next();
+}
+
+function updateSelected () {
+  var selection = DocumentApp.getActiveDocument().getSelection();
+  if (selection) {
+    var elements = selection.getRangeElements();
+    for (var i = 0; i < elements.length; i++) {
+      updateElement(elements[i].getElement().asInlineImage());
+    }
+  }
+}
+
+function updateElement (image) {
+  if (image) {
+    var match = FILE_ID_REGEX.exec(image.getLinkUrl());
+    if (match) {
+      var file = DriveApp.getFileById(match[1]);
+      replaceImage(image, file.getBlob(), true, file.getName().endsWith("@2x.png"), MAX_WIDTH);
+    }
+  }
+}
+
+function replaceImage (image, blob, updateSize, hidpi, maxWidth) {
+  var childIndex = image.getParent().getChildIndex(image);
+  var newImg = image.getParent().insertInlineImage(childIndex, blob);
+
+  if (!updateSize) {
+    newImg.setWidth(image.getWidth());
+    newImg.setHeight(image.getHeight());
+  } else {
+    var width = hidpi ? newImg.getWidth() / 2 : newImg.getWidth();
+    var height = hidpi ? newImg.getHeight() / 2 : newImg.getHeight();
+
+    if (width > maxWidth) {
+      ratio = height / width;
+      newImg.setWidth(maxWidth);
+      newImg.setHeight(Math.floor(maxWidth * ratio));
+    } else {
+      newImg.setWidth(width);
+      newImg.setHeight(height);
+    }
+  }
+
+  newImg.setLinkUrl(image.getLinkUrl());
+  image.removeFromParent();
 }
 
 function confirmImageSynchronization () {
@@ -73,17 +120,12 @@ ImageSynchronization.prototype._collectImages = function () {
 }
 
 ImageSynchronization.prototype._updateImages = function (imagesByLink) {
-  var updated = {}, childIndex;
+  var updated = {};
   var imagesToSync = this.body.getImages().filter(function (img) { return imagesByLink[img.getLinkUrl()]; });
 
   imagesToSync.forEach(function (img) {
-    childIndex = img.getParent().getChildIndex(img);
-    var newImg = img.getParent().insertInlineImage(childIndex, imagesByLink[img.getLinkUrl()].getBlob());
-    newImg.setWidth(img.getWidth());
-    newImg.setHeight(img.getHeight());
-    newImg.setLinkUrl(img.getLinkUrl());
+    replaceImage(img, imagesByLink[img.getLinkUrl()].getBlob());
     updated[img.getLinkUrl()] = true;
-    img.removeFromParent();
   });
 
   return updated;
